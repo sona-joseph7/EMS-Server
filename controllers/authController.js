@@ -15,39 +15,56 @@
 //     }
 // }
 
+const User = require('../models/user');
+const Employee = require('../models/employee'); // Add Employee model
+const bcrypt = require('bcrypt');
+const jwt = require('jsonwebtoken');
 
-const User = require('../models/user')
-const bcrypt = require('bcrypt')
-const jwt = require('jsonwebtoken')
 
 exports.login = async (req, res) => {
-    console.log("Inside login Controller");
-    console.log(req.body);
+    console.log("Login request received:", req.body);
     try {
         const { email, password } = req.body;
-        const user = await User.findOne({ email });
+
+        let user = await User.findOne({ email }); // Check admin first
+        let role;
+
+        if (user) {
+            role = "admin"; // Assign role correctly
+        } else {
+            user = await Employee.findOne({ email }); // Check employee collection
+            if (user) {
+                role = "employee"; // Assign role correctly
+            }
+        }
+
+        console.log("User found:", user); // Debugging
 
         if (!user) {
-            return res.status(404).json({ message: "User Not Found...!!!" });
+            console.log("User not found in database");
+            return res.status(404).json({ message: "User Not Found" });
         }
 
         // Compare password
         const isMatch = await bcrypt.compare(password, user.password);
         if (!isMatch) {
+            console.log("Password does not match");
             return res.status(401).json({ message: "Invalid Credentials" });
         }
 
         // Generate JWT token
         const token = jwt.sign(
-            { userId: user._id, role: user.role },
+            { userId: user._id, role: role },
             process.env.JWT_SECRET,
-            { expiresIn: "1h" }  // Token expires in 1 hour
+            { expiresIn: "1h" }
         );
 
-        res.status(200).json({ token, role: user.role, message: "Login Successful" });
+        console.log("Login successful, sending response", { token, role });
+
+        res.status(200).json({ token, role, message: "Login Successful" });
 
     } catch (err) {
-        console.log(err);
+        console.error("Server Error:", err);
         res.status(500).json({ message: "Server Error" });
     }
 };
